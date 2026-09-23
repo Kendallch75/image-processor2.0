@@ -1,8 +1,14 @@
-./image_processor photos/p1.ppm gaussian3.ppm 4 gaussian 3 && \
-./image_processor photos/p1.ppm gaussian5.ppm 4 gaussian 5 && \
-./image_processor photos/p1.ppm grayscale.ppm 4 grayscale && \
-./image_processor photos/p1.ppm invert.ppm 4 invert && \
-./image_processor photos/p1.ppm brightness.ppm 4 brightness 30 && \
-./image_processor photos/p1.ppm threshold.ppm 4 threshold 128 && \
-./image_processor photos/p1.ppm sharpen.ppm 4 sharpen && \
-./image_processor photos/p1.ppm sobel.ppm 4 sobel
+./image_processor photos/p7.ppm p7gaussian3.ppm 8 gaussian 3 && \
+./image_processor photos/p7.ppm p7gaussian3gaussian5.ppm 8 gaussian 5 && \
+./image_processor photos/p7.ppm p7grayscale.ppm 8 grayscale && \
+./image_processor photos/p7.ppm p7invert.ppm 8 invert && \
+./image_processor photos/p7.ppm p7brightness.ppm 8 brightness 30 && \
+./image_processor photos/p7.ppm p7threshold.ppm 8 threshold 128 && \
+./image_processor photos/p7.ppm p7sharpen.ppm 8 sharpen && \
+./image_processor photos/p7.ppm p7sobel.ppm 8 sobel
+
+actualizar erlang
+erlc -o erlang erlang/startup.erl
+
+pasar a ppm
+magick P6.jpg -compress none p6.ppm

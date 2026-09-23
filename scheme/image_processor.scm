@@ -140,12 +140,48 @@
 
 ; 3x3: suma 16
 ; 5x5: suma 256
+(define fila-pascal-aux
+  (lambda (n k anterior)
+    (cond
+      ((> k n) '())
+      ((= k 0)
+       (append (list 1)
+               (fila-pascal-aux n 1 1)))
+      (else
+       ((lambda (actual)
+          (append (list actual)
+                  (fila-pascal-aux n (+ k 1) actual)))
+        (quotient (* anterior (- (+ n 1) k)) k))))))
+
+(define fila-pascal
+  (lambda (n)
+    (fila-pascal-aux n 0 1)))
+
+(define multiplicar-fila-kernel
+  (lambda (fila peso)
+    (map (lambda (valor) (* valor peso)) fila)))
+
+(define construir-kernel
+  (lambda (fila pesos)
+    (cond
+      ((null? pesos) '())
+      (else
+       (append
+        (list (multiplicar-fila-kernel fila (car pesos)))
+        (construir-kernel fila (cdr pesos)))))))
+
+(define generar-kernel-gaussian
+  (lambda (tamano)
+    ((lambda (fila)
+       (construir-kernel fila fila))
+     (fila-pascal (- tamano 1)))))
+
 (define kernel-gaussian
   (lambda (tamano)
     (cond
-      ((= tamano 3) '((1 2 1) (2 4 2) (1 2 1)))
-      ((= tamano 5) '((1 4 6 4 1) (4 16 24 16 4) (6 24 36 24 6) (4 16 24 16 4) (1 4 6 4 1)))
-      (else (fallar)))))
+      ((< tamano 1) (fallar))
+      ((= (modulo tamano 2) 0) (fallar))
+      (else (generar-kernel-gaussian tamano)))))
 
 (define gaussian-pixel
   (lambda (imagen fila columna kernel)

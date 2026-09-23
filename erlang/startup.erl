@@ -8,6 +8,7 @@
     trabajador/3,
     procesarImagen/4,
     procesarImagen/6,
+    benchmark/5,
     cli/1
 ]).
 
@@ -330,16 +331,11 @@ buscarDirectorioProyecto([]) -> erlang:error(no_se_encontro_directorio_proyecto)
 % PROCESAMIENTO COMPLETO
 % ============================================================
 
-rutaSalidaResultados(ArchivoSalida) ->
-    Root = directorioProyecto(),
-    filename:join([Root, "results", filename:basename(ArchivoSalida)]).
-
 % Compatibilidad con la interfaz anterior: Gaussian por defecto.
 procesarImagen(ArchivoEntrada, ArchivoSalida, NumProcesos, TamanoKernel) ->
     procesarImagen(ArchivoEntrada, ArchivoSalida, NumProcesos, gaussian, 0, TamanoKernel).
 
 procesarImagen(ArchivoEntrada, ArchivoSalida, NumProcesos, Filtro, Parametro, TamanoKernel) ->
-    SalidaResultados = rutaSalidaResultados(ArchivoSalida),
     case validarFiltro(Filtro, Parametro, TamanoKernel) of
         ok ->
             try
@@ -351,7 +347,7 @@ procesarImagen(ArchivoEntrada, ArchivoSalida, NumProcesos, Filtro, Parametro, Ta
                 case recibirResultados(length(Zonas)) of
                     {ok, Resultados} ->
                         Reconstruida = reconstruir(Ancho, Alto, Max, Resultados),
-                        case escritor(SalidaResultados, Reconstruida) of
+                        case escritor(ArchivoSalida, Reconstruida) of
                             ok -> ok;
                             {error, RazonEscritura} -> {error, {no_se_pudo_escribir_salida, RazonEscritura}}
                         end;
@@ -368,8 +364,8 @@ tamanoKernelDivision(sharpen, _TamanoKernel) -> 3;
 tamanoKernelDivision(sobel, _TamanoKernel) -> 3;
 tamanoKernelDivision(_, _TamanoKernel) -> 1.
 
-validarFiltro(gaussian, _Parametro, 3) -> ok;
-validarFiltro(gaussian, _Parametro, 5) -> ok;
+validarFiltro(gaussian, _Parametro, TamanoKernel)
+  when is_integer(TamanoKernel), TamanoKernel > 0, TamanoKernel rem 2 =:= 1 -> ok;
 validarFiltro(grayscale, _Parametro, _TamanoKernel) -> ok;
 validarFiltro(invert, _Parametro, _TamanoKernel) -> ok;
 validarFiltro(brightness, Parametro, _TamanoKernel) when is_integer(Parametro) -> ok;
@@ -378,11 +374,66 @@ validarFiltro(sharpen, _Parametro, _TamanoKernel) -> ok;
 validarFiltro(sobel, _Parametro, _TamanoKernel) -> ok;
 validarFiltro(Filtro, Parametro, TamanoKernel) -> {error, {parametros_filtro_invalidos, Filtro, Parametro, TamanoKernel}}.
 
+% ============================================================
+% BENCHMARK: T1, Tp, SPEEDUP Y EFICIENCIA
+% ============================================================
+
+benchmark(ArchivoEntrada, PrefijoSalida, Filtro, Parametro, TamanoKernel) ->
+    case benchmarkProcesos([1, 2, 4, 8], ArchivoEntrada, PrefijoSalida, Filtro, Parametro, TamanoKernel, []) of
+        {ok, Mediciones} ->
+            [{1, T1} | _] = Mediciones,
+            Resultados = agregarMetricas(Mediciones, T1),
+            Csv = PrefijoSalida ++ "_benchmark.csv",
+            case escribirBenchmark(Csv, Resultados) of
+                ok -> {ok, Resultados, Csv};
+                {error, Razon} -> {error, {no_se_pudo_escribir_benchmark, Razon}}
+            end;
+        {error, _} = Error -> Error
+    end.
+
+benchmarkProcesos([], _Entrada, _Prefijo, _Filtro, _Parametro, _Kernel, Acumulado) ->
+    {ok, lists:reverse(Acumulado)};
+benchmarkProcesos([P | Resto], Entrada, Prefijo, Filtro, Parametro, Kernel, Acumulado) ->
+    Salida = Prefijo ++ "_" ++ integer_to_list(P) ++ ".ppm",
+    {Microsegundos, Resultado} = timer:tc(fun() -> procesarImagen(Entrada, Salida, P, Filtro, Parametro, Kernel) end),
+    case Resultado of
+        ok -> benchmarkProcesos(Resto, Entrada, Prefijo, Filtro, Parametro, Kernel,
+                                [{P, Microsegundos / 1000000.0} | Acumulado]);
+        {error, Razon} -> {error, {benchmark_fallo, P, Razon}}
+    end.
+
+agregarMetricas([], _T1) -> [];
+agregarMetricas([{P, T} | Resto], T1) ->
+    Speedup = T1 / T,
+    Eficiencia = Speedup / P,
+    [{P, T, Speedup, Eficiencia} | agregarMetricas(Resto, T1)].
+
+escribirBenchmark(Filename, Resultados) ->
+    case filelib:ensure_dir(Filename) of
+        ok -> file:write_file(Filename, ["procesos,tiempo_segundos,speedup,eficiencia\n" | filasBenchmark(Resultados)]);
+        {error, Razon} -> {error, Razon}
+    end.
+
+filasBenchmark([]) -> [];
+filasBenchmark([{P, T, S, E} | Resto]) ->
+    [io_lib:format("~b,~.6f,~.6f,~.6f~n", [P, T, S, E]) | filasBenchmark(Resto)].
 
 % ============================================================
 % INTERFAZ DE LINEA DE COMANDOS
 % ============================================================
 
+cli(["--benchmark", Entrada, Prefijo | ArgsFiltro]) ->
+    case parsearFiltroArgs(ArgsFiltro) of
+        {ok, Filtro, Parametro, Kernel} ->
+            case benchmark(Entrada, Prefijo, Filtro, Parametro, Kernel) of
+                {ok, Resultados, Csv} ->
+                    io:format("Benchmark completado: ~s~n", [Csv]),
+                    imprimirBenchmark(Resultados),
+                    ok;
+                {error, Razon} -> io:format("Error: ~p~n", [Razon]), {error, Razon}
+            end;
+        {error, Razon} -> mostrarUso(Razon)
+    end;
 cli([Entrada, Salida, ProcesosStr | ArgsFiltro]) ->
     try list_to_integer(ProcesosStr) of
         Procesos ->
@@ -436,12 +487,17 @@ mostrarUso(Razon) ->
     io:format("Error: ~p~n", [Razon]),
     io:format("Uso:\n"),
     io:format("  ./image_processor entrada.ppm salida.ppm PROCESOS\n"),
-    io:format("  ./image_processor entrada.ppm salida.ppm PROCESOS gaussian [3|5]\n"),
+    io:format("  ./image_processor entrada.ppm salida.ppm PROCESOS gaussian TAMANO_KERNEL_IMPAR\n"),
     io:format("  ./image_processor entrada.ppm salida.ppm PROCESOS grayscale\n"),
     io:format("  ./image_processor entrada.ppm salida.ppm PROCESOS invert\n"),
     io:format("  ./image_processor entrada.ppm salida.ppm PROCESOS brightness CANTIDAD\n"),
     io:format("  ./image_processor entrada.ppm salida.ppm PROCESOS threshold LIMITE\n"),
     io:format("  ./image_processor entrada.ppm salida.ppm PROCESOS sharpen\n"),
     io:format("  ./image_processor entrada.ppm salida.ppm PROCESOS sobel\n"),
+    io:format("  ./image_processor --benchmark entrada.ppm prefijo [filtro parametros]\n"),
     {error, Razon}.
 
+imprimirBenchmark([]) -> ok;
+imprimirBenchmark([{P, T, S, E} | Resto]) ->
+    io:format("~b procesos: T=~.6fs  S=~.4f  E=~.4f~n", [P, T, S, E]),
+    imprimirBenchmark(Resto).
