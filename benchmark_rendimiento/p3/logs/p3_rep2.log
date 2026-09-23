@@ -1,5 +1,0 @@
-Benchmark completado: benchmark_rendimiento/p3/benchmarks/p3_rep2_benchmark.csv
-1 procesos: T=215.439894s  S=1.0000  E=1.0000
-2 procesos: T=90.745096s  S=2.3741  E=1.1871
-4 procesos: T=47.805200s  S=4.5066  E=1.1267
-8 procesos: T=39.599420s  S=5.4405  E=0.6801

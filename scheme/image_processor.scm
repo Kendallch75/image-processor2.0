@@ -134,12 +134,9 @@
   (lambda (vecindad kernel divisor)
     (clamp-pixel (dividir-pixel (convolucion vecindad kernel) divisor))))
 
-; ============================================================
 ; 1. GAUSSIAN BLUR
-; ============================================================
 
-; 3x3: suma 16
-; 5x5: suma 256
+
 (define fila-pascal-aux
   (lambda (n k anterior)
     (cond

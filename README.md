@@ -1,131 +1,462 @@
 # Procesamiento paralelo de imágenes con Scheme y Erlang
 
-Implementación del proyecto usando imágenes PPM P3. Erlang coordina la concurrencia y divide la imagen; cada trabajador ejecuta una instancia independiente de Scheme para transformar su región.
+Procesador paralelo de imágenes PPM P3 desarrollado con Erlang y Scheme.
+
+Erlang se encarga de dividir la imagen y ejecutar los procesos concurrentes, mientras que Scheme aplica el filtro solicitado a cada región.
+
+La explicación técnica del funcionamiento interno se encuentra en la documentación PDF del proyecto.
 
 ## Requisitos
 
-- Erlang/OTP con `erl`, `erlc` y `escript`.
-- GNU Guile (recomendado) o Racket.
+Es necesario tener instalado:
 
-El programa detecta automáticamente:
+* Erlang/OTP
+* GNU Guile o Racket
 
-1. `guile` y lo ejecuta con `guile -s`.
-2. si no existe Guile, `racket` con `racket -f`.
+Se recomienda GNU Guile.
 
-Si el profesor utiliza otro Scheme, se puede indicar el comando:
+El programa busca automáticamente:
 
-```bash
-export SCHEME_CMD="comando-del-interprete"
-```
+1. `guile`
+2. `racket`, si Guile no está disponible
 
-El comando indicado debe aceptar como último argumento un archivo `.scm` para ejecutar.
-
-## Restricciones aplicadas en Scheme
-
-El archivo `scheme/image_processor.scm` no utiliza `if`, `set!`, `let`, `while` ni `cons`. Las funciones se definen con `lambda`; se utilizan `cond`, recursión, listas y `map`.
-
-## Ejecución mínima
-
-Desde la raíz del proyecto:
+Para comprobar las instalaciones:
 
 ```bash
-./image_processor tests/entrada.ppm salida.ppm 1
-./image_processor tests/entrada.ppm salida.ppm 2
-./image_processor tests/entrada.ppm salida.ppm 4
-./image_processor tests/entrada.ppm salida.ppm 8
+erl -version
+guile --version
 ```
 
-Sin indicar filtro se utiliza Gaussian Blur 3x3.
-
-## Filtros
+o:
 
 ```bash
-./image_processor entrada.ppm salida.ppm 4 gaussian 3
-./image_processor entrada.ppm salida.ppm 4 gaussian 5
-./image_processor entrada.ppm salida.ppm 4 grayscale
-./image_processor entrada.ppm salida.ppm 4 invert
-./image_processor entrada.ppm salida.ppm 4 brightness 30
-./image_processor entrada.ppm salida.ppm 4 brightness -30
-./image_processor entrada.ppm salida.ppm 4 threshold 128
-./image_processor entrada.ppm salida.ppm 4 sharpen
-./image_processor entrada.ppm salida.ppm 4 sobel
+racket --version
 ```
 
-## Benchmark
+## Ejecución
 
-El modo benchmark ejecuta 1, 2, 4 y 8 procesos, genera una imagen por configuración y un CSV con tiempo, speedup y eficiencia.
+Los comandos deben ejecutarse desde la raíz del proyecto.
+
+La estructura general es:
 
 ```bash
-./image_processor --benchmark tests/entrada.ppm resultados/gaussian gaussian 3
-```
-
-Produce:
-
-```text
-resultados/gaussian_1.ppm
-resultados/gaussian_2.ppm
-resultados/gaussian_4.ppm
-resultados/gaussian_8.ppm
-resultados/gaussian_benchmark.csv
-```
-
-Las métricas son:
-
-```text
-Sp = T1 / Tp
-Ep = Sp / p
-```
-
-## Protocolo Erlang -> Scheme
-
-Cada trabajador crea una solicitud independiente con la forma:
-
-```scheme
-(request filtro tamano-kernel parametro filas-halo-arriba alto-bloque region-con-halo)
+./image_processor ENTRADA SALIDA PROCESOS FILTRO PARAMETROS
 ```
 
 Por ejemplo:
 
-```scheme
-(request gaussian 3 0 1 20 (((255 0 0) (0 255 0)) ...))
+```bash
+./image_processor photos/p1.ppm results/salida.ppm 4 gaussian 3
 ```
 
-Scheme procesa la región completa recibida, incluyendo el halo, pero recorta el resultado antes de devolverlo. Por ello solamente devuelve las filas pertenecientes al bloque asignado al proceso Erlang.
+Donde:
 
-La salida de Scheme es una secuencia de componentes RGB separados por espacios. Erlang conoce el ancho y la altura esperados, valida la cantidad de píxeles y reconstruye las filas.
+* `photos/p1.ppm` es la imagen de entrada.
+* `results/salida.ppm` es la imagen que se generará.
+* `4` es la cantidad de procesos Erlang.
+* `gaussian` es el filtro.
+* `3` es el tamaño del kernel.
 
-## Halo y bordes
+## Ejecución mínima
 
-Para un kernel impar de tamaño `k`, Erlang utiliza:
+También se puede ejecutar sin especificar un filtro:
+
+```bash
+./image_processor photos/p1.ppm results/salida.ppm 1
+./image_processor photos/p1.ppm results/salida.ppm 2
+./image_processor photos/p1.ppm results/salida.ppm 4
+./image_processor photos/p1.ppm results/salida.ppm 8
+```
+
+En este caso se utiliza automáticamente:
 
 ```text
-halo = k / 2
+gaussian 3
 ```
 
-Cada región recibe las filas vecinas que necesita. En los límites reales de la imagen, Scheme utiliza la estrategia **repetir el píxel más cercano**.
+es decir, Gaussian Blur con kernel `3x3`.
 
-Gaussian admite 3x3 y 5x5. Sharpen y Sobel utilizan kernel 3x3. Los filtros sin convolución no requieren halo.
+## Filtros disponibles
 
-## Tolerancia a fallos
+### Gaussian Blur
 
-Cada trabajador captura errores de su instancia de Scheme y los comunica al coordinador. Si una ejecución de Scheme falla, se realiza un reintento automático. Si vuelve a fallar, el coordinador cancela la generación de la imagen final y devuelve las regiones que fallaron.
+Nombre:
 
-También se detectan:
+```text
+gaussian
+```
 
-- ausencia de intérprete Scheme;
-- salida de Scheme inexistente o incompleta;
-- timeout de Scheme;
-- PPM inválido;
-- cantidad incorrecta de píxeles;
-- filtro o parámetros inválidos.
+Uso:
 
-El timeout por defecto es de 300000 ms. Se puede cambiar con:
+```bash
+./image_processor entrada.ppm salida.ppm PROCESOS gaussian TAMANO_KERNEL
+```
+
+Ejemplos:
+
+```bash
+./image_processor photos/p1.ppm results/gaussian3.ppm 4 gaussian 3
+./image_processor photos/p1.ppm results/gaussian5.ppm 4 gaussian 5
+./image_processor photos/p1.ppm results/gaussian7.ppm 4 gaussian 7
+```
+
+El tamaño del kernel debe ser un número:
+
+* entero;
+* positivo;
+* impar.
+
+Por ejemplo:
+
+```text
+1, 3, 5, 7, 9, ...
+```
+
+### Escala de grises
+
+Nombre:
+
+```text
+grayscale
+```
+
+Uso:
+
+```bash
+./image_processor photos/p1.ppm results/grayscale.ppm 4 grayscale
+```
+
+### Inversión de colores
+
+Nombre:
+
+```text
+invert
+```
+
+Uso:
+
+```bash
+./image_processor photos/p1.ppm results/invert.ppm 4 invert
+```
+
+### Brillo
+
+Nombre:
+
+```text
+brightness
+```
+
+Uso:
+
+```bash
+./image_processor entrada.ppm salida.ppm PROCESOS brightness CANTIDAD
+```
+
+Aumentar brillo:
+
+```bash
+./image_processor photos/p1.ppm results/brillo.ppm 4 brightness 30
+```
+
+Disminuir brillo:
+
+```bash
+./image_processor photos/p1.ppm results/oscuro.ppm 4 brightness -30
+```
+
+### Threshold
+
+Nombre:
+
+```text
+threshold
+```
+
+Uso:
+
+```bash
+./image_processor entrada.ppm salida.ppm PROCESOS threshold LIMITE
+```
+
+Ejemplo:
+
+```bash
+./image_processor photos/p1.ppm results/threshold.ppm 4 threshold 128
+```
+
+El límite debe estar entre:
+
+```text
+0 y 255
+```
+
+### Sharpen
+
+Nombre:
+
+```text
+sharpen
+```
+
+Uso:
+
+```bash
+./image_processor photos/p1.ppm results/sharpen.ppm 4 sharpen
+```
+
+### Sobel
+
+Nombre:
+
+```text
+sobel
+```
+
+Uso:
+
+```bash
+./image_processor photos/p1.ppm results/sobel.ppm 4 sobel
+```
+
+## Resumen de filtros
+
+| Filtro           | Nombre       | Parámetro                    |
+| ---------------- | ------------ | ---------------------------- |
+| Gaussian Blur    | `gaussian`   | Tamaño impar del kernel      |
+| Escala de grises | `grayscale`  | Ninguno                      |
+| Invertir colores | `invert`     | Ninguno                      |
+| Brillo           | `brightness` | Cantidad positiva o negativa |
+| Threshold        | `threshold`  | Valor entre 0 y 255          |
+| Sharpen          | `sharpen`    | Ninguno                      |
+| Sobel            | `sobel`      | Ninguno                      |
+
+## Cantidad de procesos
+
+La cantidad de procesos se indica después del archivo de salida:
+
+```bash
+./image_processor entrada.ppm salida.ppm PROCESOS ...
+```
+
+Por ejemplo:
+
+```bash
+./image_processor photos/p1.ppm results/salida.ppm 1 gaussian 3
+./image_processor photos/p1.ppm results/salida.ppm 2 gaussian 3
+./image_processor photos/p1.ppm results/salida.ppm 4 gaussian 3
+./image_processor photos/p1.ppm results/salida.ppm 8 gaussian 3
+```
+
+Si se solicitan más procesos que filas tiene la imagen, el programa limita automáticamente la cantidad utilizada.
+
+## Formato de las imágenes
+
+El programa trabaja con imágenes:
+
+```text
+PPM P3
+```
+
+Ejemplo de encabezado válido:
+
+```text
+P3
+501 890
+255
+```
+
+La imagen de entrada debe estar en este formato.
+
+## Carpeta de resultados
+
+Se recomienda guardar las imágenes generadas dentro de:
+
+```text
+results/
+```
+
+Por ejemplo:
+
+```bash
+./image_processor photos/p1.ppm results/p1_sobel.ppm 8 sobel
+```
+
+La ruta de salida debe indicarse explícitamente en el comando.
+
+## Timeout de Scheme
+
+Cada instancia de Scheme tiene un tiempo máximo de ejecución.
+
+El valor predeterminado es:
+
+```text
+300000 ms
+```
+
+equivalente a 5 minutos.
+
+Puede cambiarse antes de ejecutar el programa:
 
 ```bash
 export SCHEME_TIMEOUT_MS=600000
 ```
 
-## Estructura
+Por ejemplo, `600000` corresponde a 10 minutos.
+
+## Uso desde Erlang
+
+También es posible utilizar directamente el módulo `startup`.
+
+Para Gaussian Blur:
+
+```erlang
+startup:procesarImagen(
+    "photos/p1.ppm",
+    "results/salida.ppm",
+    4,
+    3
+).
+```
+
+La función utilizada es:
+
+```text
+procesarImagen/4
+```
+
+y utiliza Gaussian Blur automáticamente.
+
+Para seleccionar un filtro manualmente se utiliza:
+
+```text
+procesarImagen/6
+```
+
+Su formato es:
+
+```erlang
+startup:procesarImagen(
+    Entrada,
+    Salida,
+    Procesos,
+    Filtro,
+    Parametro,
+    TamanoKernel
+).
+```
+
+Ejemplo con Sobel:
+
+```erlang
+startup:procesarImagen(
+    "photos/p1.ppm",
+    "results/sobel.ppm",
+    4,
+    sobel,
+    0,
+    3
+).
+```
+
+Ejemplo con Gaussian `7x7`:
+
+```erlang
+startup:procesarImagen(
+    "photos/p1.ppm",
+    "results/gaussian7.ppm",
+    4,
+    gaussian,
+    0,
+    7
+).
+```
+
+## Compilación manual
+
+Normalmente no es necesario compilar manualmente si se utiliza:
+
+```bash
+./image_processor
+```
+
+Para compilar `startup.erl` manualmente:
+
+```bash
+erlc -o erlang erlang/startup.erl
+```
+
+Luego se puede abrir Erlang:
+
+```bash
+erl -pa erlang
+```
+
+y ejecutar, por ejemplo:
+
+```erlang
+startup:procesarImagen(
+    "photos/p1.ppm",
+    "results/salida.ppm",
+    4,
+    gaussian,
+    0,
+    3
+).
+```
+
+## Ejemplos rápidos
+
+Gaussian `3x3`:
+
+```bash
+./image_processor photos/p1.ppm results/p1_gaussian.ppm 8 gaussian 3
+```
+
+Gaussian `7x7`:
+
+```bash
+./image_processor photos/p1.ppm results/p1_gaussian7.ppm 8 gaussian 7
+```
+
+Escala de grises:
+
+```bash
+./image_processor photos/p1.ppm results/p1_grayscale.ppm 8 grayscale
+```
+
+Invertir:
+
+```bash
+./image_processor photos/p1.ppm results/p1_invert.ppm 8 invert
+```
+
+Aumentar brillo:
+
+```bash
+./image_processor photos/p1.ppm results/p1_brightness.ppm 8 brightness 30
+```
+
+Threshold:
+
+```bash
+./image_processor photos/p1.ppm results/p1_threshold.ppm 8 threshold 128
+```
+
+Sharpen:
+
+```bash
+./image_processor photos/p1.ppm results/p1_sharpen.ppm 8 sharpen
+```
+
+Sobel:
+
+```bash
+./image_processor photos/p1.ppm results/p1_sobel.ppm 8 sobel
+```
+
+## Estructura básica
 
 ```text
 image-processor/
@@ -134,27 +465,14 @@ image-processor/
 │   └── startup.erl
 ├── scheme/
 │   └── image_processor.scm
-├── tests/
-│   ├── entrada.ppm
-│   └── probar.sh
+├── photos/
+│   └── ...
+├── results/
+│   └── ...
 ├── docs/
-│   └── informe_base.md
-├── funcionales.pdf
+│   └── ...
 └── README.md
 ```
 
-## Compilación manual de Erlang
+Para información sobre la implementación, paralelización, halos, convolución, generación de kernels y funcionamiento de los filtros, consultar el informe técnico del proyecto.
 
-No es necesaria si se usa `./image_processor`, porque el `escript` compila `startup.erl` automáticamente. Para compilar manualmente:
-
-```bash
-erlc -o erlang erlang/startup.erl
-```
-
-Después se puede usar el shell de Erlang:
-
-```erlang
-startup:procesarImagen("tests/entrada.ppm", "salida.ppm", 4, 3).
-startup:procesarImagen("tests/entrada.ppm", "salida_sobel.ppm", 4, sobel, 0, 3).
-startup:benchmark("tests/entrada.ppm", "resultados/prueba", gaussian, 0, 3).
-```

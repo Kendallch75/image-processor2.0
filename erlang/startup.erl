@@ -8,7 +8,6 @@
     trabajador/3,
     procesarImagen/4,
     procesarImagen/6,
-    benchmark/5,
     cli/1
 ]).
 
@@ -18,17 +17,11 @@
 
 lector(Filename) ->
     case file:read_file(Filename) of
-        {ok, Binario} -> parsear(string:tokens(quitarComentarios(binary_to_list(Binario)), " \t\r\n"));
-        {error, Razon} -> erlang:error({no_se_pudo_leer, Filename, Razon})
+        {ok, Binario} ->
+            parsear(string:tokens(binary_to_list(Binario), " \t\r\n"));
+        {error, Razon} ->
+            erlang:error({no_se_pudo_leer, Filename, Razon})
     end.
-
-quitarComentarios([]) -> [];
-quitarComentarios([$# | Resto]) -> quitarHastaSalto(Resto);
-quitarComentarios([C | Resto]) -> [C | quitarComentarios(Resto)].
-
-quitarHastaSalto([]) -> [];
-quitarHastaSalto([$\n | Resto]) -> [$\n | quitarComentarios(Resto)];
-quitarHastaSalto([_ | Resto]) -> quitarHastaSalto(Resto).
 
 parsear(["P3", AnchoStr, AltoStr, MaxStr | TokensPixeles]) ->
     Ancho = list_to_integer(AnchoStr),
@@ -66,9 +59,7 @@ formatoFila([]) -> [];
 formatoFila([{R, G, B}]) -> io_lib:format("~b ~b ~b", [R, G, B]);
 formatoFila([{R, G, B} | Resto]) -> [io_lib:format("~b ~b ~b  ", [R, G, B]) | formatoFila(Resto)].
 
-% ============================================================
 % DIVISION DE LA IMAGEN Y HALOS
-% ============================================================
 
 dividir({image, Ancho, Alto, Max, Filas}, NumProcesos, TamanoKernel)
   when NumProcesos > 0, TamanoKernel > 0, TamanoKernel rem 2 =:= 1 ->
@@ -153,10 +144,6 @@ recibirResultados(N, Resultados, Errores) ->
 
 % ============================================================
 % PROTOCOLO ERLANG -> SCHEME
-% ============================================================
-
-% Formato de solicitud:
-% (request filtro tamano-kernel parametro filas-halo-arriba alto-bloque region-con-halo)
 
 ejecutarScheme(HaloArriba, Bloque, HaloAbajo, {filtro, Filtro, Parametro, TamanoKernel}) ->
     Root = directorioProyecto(),
@@ -375,65 +362,9 @@ validarFiltro(sobel, _Parametro, _TamanoKernel) -> ok;
 validarFiltro(Filtro, Parametro, TamanoKernel) -> {error, {parametros_filtro_invalidos, Filtro, Parametro, TamanoKernel}}.
 
 % ============================================================
-% BENCHMARK: T1, Tp, SPEEDUP Y EFICIENCIA
-% ============================================================
-
-benchmark(ArchivoEntrada, PrefijoSalida, Filtro, Parametro, TamanoKernel) ->
-    case benchmarkProcesos([1, 2, 4, 8], ArchivoEntrada, PrefijoSalida, Filtro, Parametro, TamanoKernel, []) of
-        {ok, Mediciones} ->
-            [{1, T1} | _] = Mediciones,
-            Resultados = agregarMetricas(Mediciones, T1),
-            Csv = PrefijoSalida ++ "_benchmark.csv",
-            case escribirBenchmark(Csv, Resultados) of
-                ok -> {ok, Resultados, Csv};
-                {error, Razon} -> {error, {no_se_pudo_escribir_benchmark, Razon}}
-            end;
-        {error, _} = Error -> Error
-    end.
-
-benchmarkProcesos([], _Entrada, _Prefijo, _Filtro, _Parametro, _Kernel, Acumulado) ->
-    {ok, lists:reverse(Acumulado)};
-benchmarkProcesos([P | Resto], Entrada, Prefijo, Filtro, Parametro, Kernel, Acumulado) ->
-    Salida = Prefijo ++ "_" ++ integer_to_list(P) ++ ".ppm",
-    {Microsegundos, Resultado} = timer:tc(fun() -> procesarImagen(Entrada, Salida, P, Filtro, Parametro, Kernel) end),
-    case Resultado of
-        ok -> benchmarkProcesos(Resto, Entrada, Prefijo, Filtro, Parametro, Kernel,
-                                [{P, Microsegundos / 1000000.0} | Acumulado]);
-        {error, Razon} -> {error, {benchmark_fallo, P, Razon}}
-    end.
-
-agregarMetricas([], _T1) -> [];
-agregarMetricas([{P, T} | Resto], T1) ->
-    Speedup = T1 / T,
-    Eficiencia = Speedup / P,
-    [{P, T, Speedup, Eficiencia} | agregarMetricas(Resto, T1)].
-
-escribirBenchmark(Filename, Resultados) ->
-    case filelib:ensure_dir(Filename) of
-        ok -> file:write_file(Filename, ["procesos,tiempo_segundos,speedup,eficiencia\n" | filasBenchmark(Resultados)]);
-        {error, Razon} -> {error, Razon}
-    end.
-
-filasBenchmark([]) -> [];
-filasBenchmark([{P, T, S, E} | Resto]) ->
-    [io_lib:format("~b,~.6f,~.6f,~.6f~n", [P, T, S, E]) | filasBenchmark(Resto)].
-
-% ============================================================
 % INTERFAZ DE LINEA DE COMANDOS
 % ============================================================
 
-cli(["--benchmark", Entrada, Prefijo | ArgsFiltro]) ->
-    case parsearFiltroArgs(ArgsFiltro) of
-        {ok, Filtro, Parametro, Kernel} ->
-            case benchmark(Entrada, Prefijo, Filtro, Parametro, Kernel) of
-                {ok, Resultados, Csv} ->
-                    io:format("Benchmark completado: ~s~n", [Csv]),
-                    imprimirBenchmark(Resultados),
-                    ok;
-                {error, Razon} -> io:format("Error: ~p~n", [Razon]), {error, Razon}
-            end;
-        {error, Razon} -> mostrarUso(Razon)
-    end;
 cli([Entrada, Salida, ProcesosStr | ArgsFiltro]) ->
     try list_to_integer(ProcesosStr) of
         Procesos ->
@@ -494,10 +425,4 @@ mostrarUso(Razon) ->
     io:format("  ./image_processor entrada.ppm salida.ppm PROCESOS threshold LIMITE\n"),
     io:format("  ./image_processor entrada.ppm salida.ppm PROCESOS sharpen\n"),
     io:format("  ./image_processor entrada.ppm salida.ppm PROCESOS sobel\n"),
-    io:format("  ./image_processor --benchmark entrada.ppm prefijo [filtro parametros]\n"),
     {error, Razon}.
-
-imprimirBenchmark([]) -> ok;
-imprimirBenchmark([{P, T, S, E} | Resto]) ->
-    io:format("~b procesos: T=~.6fs  S=~.4f  E=~.4f~n", [P, T, S, E]),
-    imprimirBenchmark(Resto).

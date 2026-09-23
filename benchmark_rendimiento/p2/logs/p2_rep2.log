@@ -1,5 +1,0 @@
-Benchmark completado: benchmark_rendimiento/p2/benchmarks/p2_rep2_benchmark.csv
-1 procesos: T=63.424885s  S=1.0000  E=1.0000
-2 procesos: T=24.992600s  S=2.5377  E=1.2689
-4 procesos: T=12.621527s  S=5.0251  E=1.2563
-8 procesos: T=9.866441s  S=6.4283  E=0.8035
