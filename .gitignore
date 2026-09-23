@@ -1,0 +1,5 @@
+.tmp/
+erlang/*.beam
+tests/salidas/
+resultados/
+*_benchmark.csv

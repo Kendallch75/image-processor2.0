@@ -1,0 +1,5 @@
+Benchmark completado: benchmark_rendimiento/p5/benchmarks/p5_rep1_benchmark.csv
+1 procesos: T=65.153905s  S=1.0000  E=1.0000
+2 procesos: T=25.518793s  S=2.5532  E=1.2766
+4 procesos: T=12.808680s  S=5.0867  E=1.2717
+8 procesos: T=10.006362s  S=6.5112  E=0.8139

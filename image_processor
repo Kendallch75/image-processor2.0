@@ -1,0 +1,20 @@
+#!/usr/bin/env escript
+%%! -noshell
+
+main(Args) ->
+    Script = escript:script_name(),
+    Root = filename:dirname(filename:absname(Script)),
+    ErlangDir = filename:join(Root, "erlang"),
+    Source = filename:join(ErlangDir, "startup.erl"),
+    code:add_patha(ErlangDir),
+    case compile:file(Source, [{outdir, ErlangDir}, report_errors, report_warnings]) of
+        {ok, startup} -> ejecutar(Args);
+        {ok, startup, _Warnings} -> ejecutar(Args);
+        Error -> io:format("No se pudo compilar startup.erl: ~p~n", [Error]), halt(1)
+    end.
+
+ejecutar(Args) ->
+    case startup:cli(Args) of
+        ok -> halt(0);
+        {error, _} -> halt(1)
+    end.
