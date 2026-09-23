@@ -330,10 +330,16 @@ buscarDirectorioProyecto([]) -> erlang:error(no_se_encontro_directorio_proyecto)
 % PROCESAMIENTO COMPLETO
 % ============================================================
 
+rutaSalidaResultados(ArchivoSalida) ->
+    Root = directorioProyecto(),
+    filename:join([Root, "results", filename:basename(ArchivoSalida)]).
+
+% Compatibilidad con la interfaz anterior: Gaussian por defecto.
 procesarImagen(ArchivoEntrada, ArchivoSalida, NumProcesos, TamanoKernel) ->
     procesarImagen(ArchivoEntrada, ArchivoSalida, NumProcesos, gaussian, 0, TamanoKernel).
 
 procesarImagen(ArchivoEntrada, ArchivoSalida, NumProcesos, Filtro, Parametro, TamanoKernel) ->
+    SalidaResultados = rutaSalidaResultados(ArchivoSalida),
     case validarFiltro(Filtro, Parametro, TamanoKernel) of
         ok ->
             try
@@ -345,7 +351,7 @@ procesarImagen(ArchivoEntrada, ArchivoSalida, NumProcesos, Filtro, Parametro, Ta
                 case recibirResultados(length(Zonas)) of
                     {ok, Resultados} ->
                         Reconstruida = reconstruir(Ancho, Alto, Max, Resultados),
-                        case escritor(ArchivoSalida, Reconstruida) of
+                        case escritor(SalidaResultados, Reconstruida) of
                             ok -> ok;
                             {error, RazonEscritura} -> {error, {no_se_pudo_escribir_salida, RazonEscritura}}
                         end;

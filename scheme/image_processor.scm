@@ -1,15 +1,6 @@
 ; ============================================================
 ; PROYECTO FUNCIONAL
 ; PROCESAMIENTO DE IMAGENES EN SCHEME
-;
-; Restricciones usadas:
-; - sin if
-; - sin set!
-; - sin let
-; - sin while
-; - sin cons
-; - funciones con lambda
-; - recursión, listas y map
 ; ============================================================
 
 ; FUNCIONES GENERALES
